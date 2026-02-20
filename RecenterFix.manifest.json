@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/bsmg/BSIPA-MetadataFileSchema/master/Schema.json",
+  "id": "RecenterFix",
+  "name": "RecenterFix",
+  "author": "Dylan",
+  "version": "1.0.0",
+  "gameVersion": "1.40.8",
+  "description": "Fixes the OpenXR tracking origin shift bug",
+  "dependsOn": {
+    "BSIPA": "^4.3.0",
+    "BeatSaberMarkupLanguage": "^1.12.0"
+  }
+}

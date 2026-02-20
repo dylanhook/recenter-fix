@@ -1,0 +1,19 @@
+<scroll-view xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://monkeymanboy.github.io/BSML-Docs/BSMLSchema.xsd">
+    <vertical pad-top="15" spacing="8" horizontal-fit="PreferredSize">
+        <text text="Floor Calibration" align="Center" font-size="6" bold="true"/>
+
+        <vertical spacing="3">
+            <text text="1. Place a controller on the floor" align="Center" font-size="4"/>
+            <text text="2. Press the button below" align="Center" font-size="4"/>
+        </vertical>
+
+        <horizontal pad-top="4" spacing="4">
+            <action-button text="Calibrate Floor" on-click="calibrate-click" preferred-width="35" preferred-height="10" font-size="5"/>
+            <action-button text="Reset" on-click="reset-click" preferred-width="20" preferred-height="10" font-size="4"/>
+        </horizontal>
+
+        <text id="status-text" text="~status-value" align="Center" font-size="3.5" color="#AAAAAA" word-wrapping="true"/>
+
+        <text text="mod by youtube.com/dylanhook" align="Center" font-size="3" color="#888888" pad-top="20"/>
+    </vertical>
+</scroll-view>
