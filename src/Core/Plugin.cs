@@ -30,6 +30,8 @@ public class Plugin
         Harmony = new Harmony(HarmonyId);
         Harmony.PatchAll(typeof(Plugin).Assembly);
 
+        Camera2Compatibility.Init();
+
         var compensatorObj = new GameObject("RecenterFix_Compensator");
         compensatorObj.AddComponent<RecenterCompensator>();
         Object.DontDestroyOnLoad(compensatorObj);

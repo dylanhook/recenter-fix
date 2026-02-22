@@ -3,6 +3,15 @@ using UnityEngine;
 
 namespace RecenterFix.Patches;
 
+[HarmonyPatch(typeof(VRCenterAdjust), "Start")]
+internal static class VRCenterAdjustStartPatch
+{
+    private static void Postfix(VRCenterAdjust __instance)
+    {
+        Camera2Compatibility.SetRoomOrigin(__instance.transform);
+    }
+}
+
 [HarmonyPatch(typeof(VRCenterAdjust), "SetRoomTransformOffset")]
 internal static class VRCenterAdjustPatch
 {
