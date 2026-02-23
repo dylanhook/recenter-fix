@@ -1,4 +1,5 @@
 using IPA.Config.Stores;
+using IPA.Config.Stores.Attributes;
 using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo(GeneratedStore.AssemblyVisibilityTarget)]
@@ -11,8 +12,6 @@ internal class PluginConfig
 
     public virtual float FloorCalibrationY { get; set; }
 
-    [IPA.Config.Stores.Attributes.Ignore]
+    [Ignore]
     public float RecenterCompensationY { get; set; }
-
-    public float TotalCorrectionY => FloorCalibrationY + RecenterCompensationY;
 }

@@ -1,27 +1,34 @@
 using HarmonyLib;
+using RecenterFix.Compatibility;
 using UnityEngine;
 
-namespace RecenterFix.Patches;
+#pragma warning disable IDE0051
 
-[HarmonyPatch(typeof(VRCenterAdjust), "Start")]
-internal static class VRCenterAdjustStartPatch
-{
-    private static void Postfix(VRCenterAdjust __instance)
-    {
-        Camera2Compatibility.SetRoomOrigin(__instance.transform);
-    }
-}
+namespace RecenterFix.HarmonyPatches;
 
 [HarmonyPatch(typeof(VRCenterAdjust), "SetRoomTransformOffset")]
+[HarmonyAfter("Kinsi55.BeatSaber.Cam2")]
 internal static class VRCenterAdjustPatch
 {
-    private static void Postfix(VRCenterAdjust __instance)
+    private static void Postfix(VRCenterAdjust __instance, SettingsManager ____settingsManager)
     {
-        float correction = PluginConfig.Instance?.TotalCorrectionY ?? 0f;
-        if (Mathf.Abs(correction) < 0.001f) return;
+        if (PluginConfig.Instance == null) return;
+
+        float correction = PluginConfig.Instance.FloorCalibrationY
+                         + PluginConfig.Instance.RecenterCompensationY;
+
+        if (Mathf.Abs(correction) < 0.001f)
+        {
+            Camera2Bridge.NotifyRoomOffsetChanged(
+                ____settingsManager.settings.room.center,
+                __instance.transform.localRotation);
+            return;
+        }
 
         var pos = __instance.transform.localPosition;
         pos.y += correction;
         __instance.transform.localPosition = pos;
+
+        Camera2Bridge.NotifyRoomOffsetChanged(pos, __instance.transform.localRotation);
     }
 }

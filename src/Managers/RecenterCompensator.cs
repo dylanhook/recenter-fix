@@ -1,95 +1,121 @@
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.XR;
 
-namespace RecenterFix;
+#pragma warning disable IDE0051
 
-public class RecenterCompensator : MonoBehaviour
+namespace RecenterFix.Managers;
+
+internal sealed class RecenterCompensator : MonoBehaviour
 {
-    public static RecenterCompensator Instance { get; private set; }
+    internal static RecenterCompensator Instance { get; private set; }
+
+    private static readonly MethodInfo SetRoomTransformOffsetMethod =
+        typeof(VRCenterAdjust).GetMethod(
+            "SetRoomTransformOffset",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+    private readonly List<XRInputSubsystem> _subsystemsCache = [];
 
     private float _lastHmdY;
     private bool _hasLastHmdY;
     private bool _subscribed;
 
-    void Awake()
-    {
-        Instance = this;
-    }
+    private void Awake() => Instance = this;
 
-    void OnDestroy()
+    private void OnDestroy()
     {
         if (Instance == this) Instance = null;
         UnsubscribeAll();
     }
 
-    void OnEnable()
-    {
-        SubscribeToSubsystems();
-    }
+    private void OnEnable() => SubscribeToSubsystems();
 
-    void OnDisable()
-    {
-        UnsubscribeAll();
-    }
+    private void OnDisable() => UnsubscribeAll();
 
-    void Update()
+    private void Update()
     {
         if (!_subscribed)
-        {
             SubscribeToSubsystems();
-        }
 
         var hmd = InputDevices.GetDeviceAtXRNode(XRNode.Head);
-        if (hmd.TryGetFeatureValue(CommonUsages.devicePosition, out var pos))
-        {
-            _lastHmdY = pos.y;
-            _hasLastHmdY = true;
-        }
+        if (!hmd.TryGetFeatureValue(CommonUsages.devicePosition, out var pos)) return;
+
+        _lastHmdY = pos.y;
+        _hasLastHmdY = true;
     }
 
     private void OnTrackingOriginUpdated(XRInputSubsystem subsystem)
     {
-        if (!_hasLastHmdY || PluginConfig.Instance == null) return;
+        if (!_hasLastHmdY || PluginConfig.Instance == null)
+        {
+            Plugin.Log?.Warn("Recenter detected but not ready");
+            return;
+        }
 
         float beforeY = _lastHmdY;
         var hmd = InputDevices.GetDeviceAtXRNode(XRNode.Head);
-        if (!hmd.TryGetFeatureValue(CommonUsages.devicePosition, out var pos)) return;
+
+        if (!hmd.TryGetFeatureValue(CommonUsages.devicePosition, out var pos))
+        {
+            Plugin.Log?.Warn("Recenter detected but couldn't read HMD");
+            return;
+        }
 
         float afterY = pos.y;
         float delta = afterY - beforeY;
-        if (Mathf.Abs(delta) < 0.01f) return;
+
+        Plugin.Log?.Info($"Recenter: before={beforeY:F4} after={afterY:F4} delta={delta:F4}");
+
+        if (Mathf.Abs(delta) < 0.01f)
+        {
+            Plugin.Log?.Info("Delta too small, skipping");
+            return;
+        }
 
         PluginConfig.Instance.RecenterCompensationY -= delta;
-        if (Plugin.SettingsApplicator != null)
+        _lastHmdY = afterY;
+
+        Plugin.Log?.Info($"Compensation={PluginConfig.Instance.RecenterCompensationY:F4}");
+
+        ForceUpdateAllVRCenterAdjusts();
+    }
+
+    internal static void ForceUpdateAllVRCenterAdjusts()
+    {
+        if (SetRoomTransformOffsetMethod == null)
         {
-            Plugin.SettingsApplicator.NotifyRoomTransformOffsetWasUpdated();
+            Plugin.Log?.Error("SetRoomTransformOffset method not found");
+            return;
         }
+
+        var instances = FindObjectsOfType<VRCenterAdjust>();
+        foreach (var vca in instances)
+            SetRoomTransformOffsetMethod.Invoke(vca, null);
     }
 
     private void SubscribeToSubsystems()
     {
-        var subsystems = new List<XRInputSubsystem>();
-        SubsystemManager.GetSubsystems(subsystems);
+        _subsystemsCache.Clear();
+        SubsystemManager.GetSubsystems(_subsystemsCache);
 
-        foreach (var sub in subsystems)
+        foreach (var sub in _subsystemsCache)
         {
             sub.trackingOriginUpdated -= OnTrackingOriginUpdated;
             sub.trackingOriginUpdated += OnTrackingOriginUpdated;
         }
 
-        _subscribed = subsystems.Count > 0;
+        _subscribed = _subsystemsCache.Count > 0;
     }
 
     private void UnsubscribeAll()
     {
-        var subsystems = new List<XRInputSubsystem>();
-        SubsystemManager.GetSubsystems(subsystems);
+        _subsystemsCache.Clear();
+        SubsystemManager.GetSubsystems(_subsystemsCache);
 
-        foreach (var sub in subsystems)
-        {
+        foreach (var sub in _subsystemsCache)
             sub.trackingOriginUpdated -= OnTrackingOriginUpdated;
-        }
 
         _subscribed = false;
     }

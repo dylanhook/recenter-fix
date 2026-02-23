@@ -1,20 +1,24 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using BeatSaberMarkupLanguage.Attributes;
+using RecenterFix.Managers;
+using UnityEngine;
 using UnityEngine.XR;
+
+#pragma warning disable IDE0051
 
 namespace RecenterFix.UI;
 
-public class SettingsUI : INotifyPropertyChanged
+internal sealed class SettingsUI : INotifyPropertyChanged
 {
-    public static SettingsUI Instance { get; } = new SettingsUI();
+    internal static SettingsUI Instance { get; } = new();
+
+    private const float ControllerFloorOffset = -0.01f;
 
     public event PropertyChangedEventHandler PropertyChanged;
 
-    protected void OnPropertyChanged([CallerMemberName] string propertyName = null)
-    {
+    private void OnPropertyChanged([CallerMemberName] string propertyName = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
 
     private string _statusValue = "Not calibrated";
 
@@ -24,6 +28,7 @@ public class SettingsUI : INotifyPropertyChanged
         get => _statusValue;
         set
         {
+            if (_statusValue == value) return;
             _statusValue = value;
             OnPropertyChanged();
         }
@@ -32,11 +37,16 @@ public class SettingsUI : INotifyPropertyChanged
     [UIAction("calibrate-click")]
     private void OnCalibrateClick()
     {
-        var leftHand = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
-        var rightHand = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
+        if (Plugin.SettingsManager == null)
+        {
+            StatusValue = "Error: settings not loaded yet";
+            return;
+        }
 
-        bool hasLeft = leftHand.TryGetFeatureValue(CommonUsages.devicePosition, out var leftPos);
-        bool hasRight = rightHand.TryGetFeatureValue(CommonUsages.devicePosition, out var rightPos);
+        bool hasLeft = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand)
+            .TryGetFeatureValue(CommonUsages.devicePosition, out var leftPos);
+        bool hasRight = InputDevices.GetDeviceAtXRNode(XRNode.RightHand)
+            .TryGetFeatureValue(CommonUsages.devicePosition, out var rightPos);
 
         if (!hasLeft && !hasRight)
         {
@@ -44,40 +54,32 @@ public class SettingsUI : INotifyPropertyChanged
             return;
         }
 
-        float floorY;
-        string which;
-
-        if (hasLeft && hasRight)
+        var (floorY, which) = (hasLeft, hasRight) switch
         {
-            if (leftPos.y <= rightPos.y) { floorY = leftPos.y; which = "Left"; }
-            else { floorY = rightPos.y; which = "Right"; }
-        }
-        else if (hasLeft) { floorY = leftPos.y; which = "Left"; }
-        else { floorY = rightPos.y; which = "Right"; }
+            (true, true) => leftPos.y <= rightPos.y
+                ? (leftPos.y, "Left")
+                : (rightPos.y, "Right"),
+            (true, false) => (leftPos.y, "Left"),
+            _ => (rightPos.y, "Right")
+        };
 
-        float controllerThickness = 0.035f;
-        float totalNeeded = -(floorY - controllerThickness);
-        float calibration = totalNeeded - PluginConfig.Instance.RecenterCompensationY;
-        PluginConfig.Instance.FloorCalibrationY = calibration;
+        float existingRoomY = Plugin.SettingsManager.settings.room.center.y;
+        float actualFloorInVR = floorY + existingRoomY
+                              + PluginConfig.Instance.RecenterCompensationY
+                              + ControllerFloorOffset;
 
-        if (Plugin.SettingsApplicator != null)
-        {
-            Plugin.SettingsApplicator.NotifyRoomTransformOffsetWasUpdated();
-        }
+        PluginConfig.Instance.FloorCalibrationY = -actualFloorInVR;
 
-        StatusValue = $"Calibrated! {which} at {floorY:F3}m, calibration {calibration:F3}m";
+        RecenterCompensator.ForceUpdateAllVRCenterAdjusts();
+
+        StatusValue = $"Calibrated! {which} at {floorY:F3}m, offset {-actualFloorInVR:F3}m";
     }
 
     [UIAction("reset-click")]
     private void OnResetClick()
     {
         PluginConfig.Instance.FloorCalibrationY = 0f;
-
-        if (Plugin.SettingsApplicator != null)
-        {
-            Plugin.SettingsApplicator.NotifyRoomTransformOffsetWasUpdated();
-        }
-
+        RecenterCompensator.ForceUpdateAllVRCenterAdjusts();
         StatusValue = "Floor calibration reset";
     }
 }
